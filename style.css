@@ -438,9 +438,7 @@ button {
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  min-height: 250px;
-  padding: 1.6rem;
+  overflow: hidden;
   border-radius: var(--radius);
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -452,6 +450,34 @@ button {
   transform: translateY(-6px);
   border-color: var(--card-accent, var(--accent));
   background: var(--bg-card-hover);
+}
+
+.cluster-mini-media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #10131a;
+  border-bottom: 1px solid var(--border);
+}
+
+.cluster-mini-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.7s var(--ease-out);
+}
+
+.cluster-mini-card:hover .cluster-mini-media img {
+  transform: scale(1.06);
+}
+
+.cluster-mini-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 1;
+  padding: 1.45rem;
 }
 
 .cluster-mini-top {
@@ -470,9 +496,9 @@ button {
 
 .cluster-mini-title {
   font-family: var(--font-serif);
-  font-size: 1.65rem;
+  font-size: 1.6rem;
   line-height: 1.15;
-  margin: 1.25rem 0 0.75rem;
+  margin: 1rem 0 0.7rem;
 }
 
 .cluster-mini-desc {
@@ -520,6 +546,28 @@ button {
   display: grid;
   grid-template-columns: 1.35fr 1fr;
   gap: clamp(1.75rem, 4vw, 3.5rem);
+}
+
+.cluster-detail-media {
+  position: relative;
+  aspect-ratio: 21 / 9;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #10131a;
+  border: 1px solid var(--border);
+  margin-bottom: 1.4rem;
+}
+
+.cluster-detail-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.7s var(--ease-out);
+}
+
+.cluster-detail-card:hover .cluster-detail-media img {
+  transform: scale(1.03);
 }
 
 .cluster-badge {

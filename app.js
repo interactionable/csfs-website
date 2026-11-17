@@ -7,13 +7,13 @@
 const CONFIG = {
   // Paste your deployed Google Apps Script Web App URL here (or pass ?api=URL in the browser address bar)
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyTZOwNlNMcZVXyiZhRX4TZ6mOGUylgUZJVuGxwxwdsxDxiOUXeiUoAxwUjgoSmYqoG/exec',
-  STORAGE_KEY: 'csfs_studio_data_v1'
+  STORAGE_KEY: 'csfs_studio_data_v2'
 };
 
 // Default studio dataset (renders immediately while live Apps Script data syncs)
 const FALLBACK_DATA = {
   landing: {
-    title: 'YOOBOOO YOOO YOOHOO Creative Systems & Futures',
+    title: 'Creative Systems & Futures',
     tagline: 'Bridging artistic production, systems thinking, and applied futures research.',
     about: 'The Creative Systems & Futures studio is the Faculty of Information and Communication Studies’ platform for artistic and speculative research. It advances practice-led inquiry as a method for investigating complex social, technological, and ecological systems—positioning creative production not as peripheral cultural output but as a mode of systems research.',
     unit_url: 'https://fics.upou.edu.ph',
@@ -27,7 +27,8 @@ const FALLBACK_DATA = {
       facilitator: 'Diego S. Maranan',
       keywords: ['embodiment', 'ecological systems', 'artscience', 'futures literacy', 'speculative design', 'bio-art', 'regenerative design'],
       description: 'Embodied Ecologies & Speculative Systems (EESS) integrates complexity science, technology design, and somatic perspectives to explore human–nonhuman entanglements, embodied cognition, and multiscalar ecological systems.',
-      accent_hex: '#7ee0b8'
+      accent_hex: '#7ee0b8',
+      thumbnail_url: ''
     },
     {
       cluster_id: 'cl_gmdc',
@@ -36,7 +37,8 @@ const FALLBACK_DATA = {
       facilitator: 'Alice Sarmiento',
       keywords: ['feminist/queer media', 'postcolonial critique', 'platform cultures', 'algorithmic desire', 'digital intimacy'],
       description: 'Gender, Media & Digital Cultures examines platform ecologies, algorithmic mediation, and intersectional digital identities through critical and artistic research.',
-      accent_hex: '#f59eb8'
+      accent_hex: '#f59eb8',
+      thumbnail_url: ''
     },
     {
       cluster_id: 'cl_nat',
@@ -45,7 +47,8 @@ const FALLBACK_DATA = {
       facilitator: 'Benny Agapito',
       keywords: ['narrative aesthetics', 'film & television', 'transmedia storytelling', 'AR/XR', 'immersive media', 'worldbuilding'],
       description: 'Narrative, Aesthetics & Transmedia explores speculative storytelling, experimental film, interactive narrative, and worldbuilding as tools for reimagining communicative futures.',
-      accent_hex: '#8ba6ff'
+      accent_hex: '#8ba6ff',
+      thumbnail_url: ''
     },
     {
       cluster_id: 'cl_dcsi',
@@ -54,7 +57,8 @@ const FALLBACK_DATA = {
       facilitator: 'Ruth Rodriguez',
       keywords: ['communication design', 'media arts', 'participatory futures', 'UI/UX', 'service design', 'social innovation'],
       description: 'Design, Communication & Social Innovation advances practice-led design research in participatory futures, and communication-driven transformation, particularly in industry and community contexts.',
-      accent_hex: '#f6c177'
+      accent_hex: '#f6c177',
+      thumbnail_url: ''
     }
   ],
   projects: [
@@ -111,18 +115,22 @@ function getApiUrl() {
 function normalizePayload(raw) {
   if (!raw || typeof raw !== 'object') return structuredClone(FALLBACK_DATA);
 
-  // Merge landing safely (handles accidental reversed key/value rows in Sheets)
+  // Merge landing safely (handles accidental reversed key/value rows and about_short alias)
   const landing = { ...FALLBACK_DATA.landing };
+  const validLandingKeys = ['title', 'tagline', 'about', 'about_short', 'unit_url', 'contact_email'];
   if (raw.landing && typeof raw.landing === 'object') {
     Object.entries(raw.landing).forEach(([k, v]) => {
       const key = String(k || '').trim();
       const val = String(v || '').trim();
-      if (['title', 'tagline', 'about', 'unit_url', 'contact_email'].includes(key) && val) {
-        landing[key] = val;
-      } else if (['title', 'tagline', 'about', 'unit_url', 'contact_email'].includes(val) && key) {
-        landing[val] = key;
+      if (validLandingKeys.includes(key) && val) {
+        landing[key === 'about_short' ? 'about' : key] = val;
+      } else if (validLandingKeys.includes(val) && key) {
+        landing[val === 'about_short' ? 'about' : val] = key;
       }
     });
+  }
+  if (landing.unit_url && !/^https?:\/\//i.test(landing.unit_url)) {
+    landing.unit_url = FALLBACK_DATA.landing.unit_url;
   }
 
   // Normalize members first so we can resolve facilitator slugs
@@ -135,16 +143,18 @@ function normalizePayload(raw) {
       }))
     : structuredClone(FALLBACK_DATA.members);
 
-  // Build slug -> member map ("diego_maranan" -> Diego S. Maranan)
+  // Build slug -> member map
   const slugToMember = {};
   members.forEach(m => {
     const clean = m.member_name.toLowerCase().replace(/\s+[a-z]\.\s+/g, ' ');
-    const slug = clean.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-    slugToMember[slug] = m;
+    const slugUnderscore = clean.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    const slugCompact = clean.replace(/[^a-z0-9]+/g, '');
+    slugToMember[slugUnderscore] = m;
+    slugToMember[slugCompact] = m;
     slugToMember[m.member_name.toLowerCase()] = m;
   });
 
-  // Normalize clusters (auto-generates short_name, accent_hex, and resolves facilitator names)
+  // Normalize clusters (including thumbnail_url and comma-separated facilitators)
   const rawClusters = Array.isArray(raw.clusters) && raw.clusters.length
     ? raw.clusters
     : FALLBACK_DATA.clusters;
@@ -158,30 +168,36 @@ function normalizePayload(raw) {
       .map(w => w[0])
       .join('') || `C${idx + 1}`;
 
-    const facRaw = String(c.facilitator || '').trim();
-    const facMatch = slugToMember[facRaw.toLowerCase()];
-    const facilitatorName = facMatch
-      ? facMatch.member_name
-      : facRaw.replace(/_/g, ' ').replace(/\w/g, ch => ch.toUpperCase());
+    const facTokens = String(c.facilitator || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
 
-    // Ensure facilitator is also associated with this cluster in memory if cluster_ids were empty
-    if (facMatch && !facMatch.cluster_ids.includes(id)) {
-      facMatch.cluster_ids.push(id);
-    }
+    const facilitators = facTokens.map(token => {
+      const compactToken = token.toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const match = slugToMember[token.toLowerCase()] || slugToMember[compactToken];
+      if (match) {
+        if (!match.cluster_ids.includes(id)) match.cluster_ids.push(id);
+        return { member_name: match.member_name, profile_url: match.profile_url };
+      }
+      const prettyName = token.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+      return { member_name: prettyName, profile_url: '' };
+    });
 
     return {
       cluster_id: id,
       name,
       short_name: String(c.short_name || '').trim() || generatedShort,
-      facilitator: facilitatorName,
-      facilitator_url: facMatch ? facMatch.profile_url : '',
+      facilitator: facilitators.map(f => f.member_name).join(', '),
+      facilitators,
       keywords: Array.isArray(c.keywords) ? c.keywords : [],
       description: String(c.description || '').trim(),
-      accent_hex: String(c.accent_hex || '').trim() || DEFAULT_CLUSTER_PALETTE[idx % DEFAULT_CLUSTER_PALETTE.length]
+      accent_hex: String(c.accent_hex || '').trim() || DEFAULT_CLUSTER_PALETTE[idx % DEFAULT_CLUSTER_PALETTE.length],
+      thumbnail_url: String(c.thumbnail_url || '').trim()
     };
   });
 
-  // Use live projects if populated, otherwise preserve fallback sample so the UI is never blank
+  // Normalize projects
   const projects = Array.isArray(raw.projects) && raw.projects.length
     ? raw.projects.map(p => ({
         project_name: String(p.project_name || '').trim(),
@@ -204,7 +220,6 @@ async function syncData() {
   const statusDot = document.getElementById('sync-dot');
   const statusText = document.getElementById('sync-status');
 
-  // 1. Hydrate from localStorage immediately if cached
   try {
     const cached = localStorage.getItem(CONFIG.STORAGE_KEY);
     if (cached) {
@@ -213,7 +228,6 @@ async function syncData() {
     }
   } catch (_) {}
 
-  // 2. Fetch live Google Apps Script endpoint if configured
   const apiUrl = getApiUrl();
   if (!apiUrl) {
     statusText.textContent = 'DEMO ARCHIVE';
@@ -308,33 +322,57 @@ function renderPersonPill(person) {
 function renderLanding() {
   const { landing, clusters, projects } = state.data;
 
+  if (landing.title) {
+    const heroTitleEl = document.getElementById('hero-title');
+    if (landing.title.includes('&')) {
+      const [before, after] = landing.title.split('&');
+      heroTitleEl.innerHTML = `${escapeHtml(before.trim())} <br /><em>&amp; ${escapeHtml(after.trim())}</em> Studio`;
+    } else {
+      heroTitleEl.textContent = landing.title;
+    }
+    const footerBrand = document.querySelector('.footer-brand');
+    if (footerBrand) footerBrand.textContent = landing.title;
+  }
+
   document.getElementById('hero-tagline').textContent = landing.tagline;
   document.getElementById('hero-about').textContent = landing.about;
   document.getElementById('footer-unit-link').href = landing.unit_url;
   document.getElementById('footer-email-link').href = `mailto:${landing.contact_email}`;
 
-  // 4-Cluster Interactive Strip
+  // 4-Cluster Interactive Strip (with thumbnail_url support)
   const clustersContainer = document.getElementById('landing-clusters');
-  clustersContainer.innerHTML = clusters.map((c, idx) => `
-    <a href="#/clusters"
-       class="cluster-mini-card"
-       style="--card-accent: ${escapeHtml(c.accent_hex)}"
-       data-accent="${escapeHtml(c.accent_hex)}"
-       data-cursor="CLUSTER">
-      <div>
-        <div class="cluster-mini-top">
-          <span class="mono">0${idx + 1} · ${escapeHtml(c.short_name)}</span>
-          <span class="cluster-swatch"></span>
+  clustersContainer.innerHTML = clusters.map((c, idx) => {
+    const fallbackImg = generateProceduralCover(c.short_name || c.name, c.accent_hex);
+    const imgSrc = c.thumbnail_url || fallbackImg;
+    return `
+      <a href="#/clusters"
+         class="cluster-mini-card"
+         style="--card-accent: ${escapeHtml(c.accent_hex)}"
+         data-accent="${escapeHtml(c.accent_hex)}"
+         data-cursor="CLUSTER">
+        <div class="cluster-mini-media">
+          <img src="${escapeHtml(imgSrc)}"
+               alt="${escapeHtml(c.name)}"
+               loading="lazy"
+               onerror="this.onerror=null;this.src='${fallbackImg}';" />
         </div>
-        <h3 class="cluster-mini-title">${escapeHtml(c.name)}</h3>
-        <p class="cluster-mini-desc">${escapeHtml(c.description)}</p>
-      </div>
-      <div class="cluster-mini-foot">
-        <span>Lead: ${escapeHtml(c.facilitator || 'TBA')}</span>
-        <span class="mono">→</span>
-      </div>
-    </a>
-  `).join('');
+        <div class="cluster-mini-body">
+          <div>
+            <div class="cluster-mini-top">
+              <span class="mono">0${idx + 1} · ${escapeHtml(c.short_name)}</span>
+              <span class="cluster-swatch"></span>
+            </div>
+            <h3 class="cluster-mini-title">${escapeHtml(c.name)}</h3>
+            <p class="cluster-mini-desc">${escapeHtml(c.description)}</p>
+          </div>
+          <div class="cluster-mini-foot">
+            <span>Lead: ${escapeHtml(c.facilitator || 'TBA')}</span>
+            <span class="mono">→</span>
+          </div>
+        </div>
+      </a>
+    `;
+  }).join('');
 
   // Featured Projects (top 3 by display_order)
   const featured = projects.slice(0, 3);
@@ -348,6 +386,8 @@ function renderClustersView() {
   container.innerHTML = clusters.map((c, idx) => {
     const clusterProjects = projects.filter(p => p.cluster_ids.includes(c.cluster_id));
     const clusterMembers = members.filter(m => m.cluster_ids.includes(c.cluster_id));
+    const fallbackImg = generateProceduralCover(c.short_name || c.name, c.accent_hex);
+    const imgSrc = c.thumbnail_url || fallbackImg;
 
     return `
       <article class="cluster-detail-card"
@@ -355,6 +395,12 @@ function renderClustersView() {
                data-accent="${escapeHtml(c.accent_hex)}">
         <div class="cluster-detail-grid">
           <div>
+            <div class="cluster-detail-media">
+              <img src="${escapeHtml(imgSrc)}"
+                   alt="${escapeHtml(c.name)}"
+                   loading="lazy"
+                   onerror="this.onerror=null;this.src='${fallbackImg}';" />
+            </div>
             <div class="cluster-badge mono">
               <span class="cluster-swatch"></span>
               <span>CLUSTER 0${idx + 1} · ${escapeHtml(c.short_name)}</span>
@@ -370,10 +416,10 @@ function renderClustersView() {
 
           <div class="cluster-sidebar">
             <div>
-              <span class="mono meta-block-label">CLUSTER FACILITATOR</span>
+              <span class="mono meta-block-label">CLUSTER FACILITATOR(S)</span>
               <div class="pill-list">
-                ${c.facilitator
-                  ? renderPersonPill({ member_name: c.facilitator, profile_url: c.facilitator_url })
+                ${c.facilitators && c.facilitators.length
+                  ? c.facilitators.map(renderPersonPill).join('')
                   : '<span class="person-pill">TBA</span>'}
               </div>
             </div>
@@ -466,7 +512,6 @@ function renderProjectCard(p) {
 function renderProjectsView() {
   const { clusters, projects } = state.data;
 
-  // Cluster filter pills
   const filterContainer = document.getElementById('project-cluster-filters');
   filterContainer.innerHTML = [
     `<button class="filter-pill ${state.projectClusterFilter === 'all' ? 'is-active' : ''}" data-pcluster="all">All Clusters</button>`,
@@ -477,7 +522,6 @@ function renderProjectsView() {
     `)
   ].join('');
 
-  // Filter projects
   const filtered = projects.filter(p => {
     const matchCluster = state.projectClusterFilter === 'all' || p.cluster_ids.includes(state.projectClusterFilter);
     const isOngoing = String(p.end_date).toLowerCase() === 'ongoing' || !p.end_date;
@@ -497,7 +541,6 @@ function renderProjectsView() {
 function renderMembersView() {
   const { clusters, members } = state.data;
 
-  // Filter bar
   const filterContainer = document.getElementById('member-cluster-filters');
   filterContainer.innerHTML = [
     `<button class="filter-pill ${state.memberClusterFilter === 'all' ? 'is-active' : ''}" data-mcluster="all">All Members (${members.length})</button>`,
@@ -512,7 +555,6 @@ function renderMembersView() {
     state.memberClusterFilter === 'all' || m.cluster_ids.includes(state.memberClusterFilter)
   );
 
-  // Group by role hierarchy
   const roleOrder = ['Lead', 'Co-Lead', 'Senior', 'Associate', 'Affiliate', 'Junior/Undergraduate'];
   const groups = {};
   filtered.forEach(m => {
@@ -641,12 +683,10 @@ function navigateToRoute(routeName, instant = false) {
   const target = validRoutes.includes(routeName) ? routeName : 'landing';
   state.activeRoute = target;
 
-  // Update active nav pills
   document.querySelectorAll('.nav-link').forEach(link => {
     link.classList.toggle('is-active', link.dataset.route === target);
   });
 
-  // Shift WebGL shader palette
   const theme = ROUTE_THEME[target];
   setAccentTheme(theme.color, theme.energy);
 
@@ -738,7 +778,6 @@ function initWebGLBackdrop() {
     uniform vec3 uSecondary;
     uniform float uEnergy;
 
-    // Smooth 2D value noise
     float hash(vec2 p) {
       return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
     }
@@ -781,7 +820,6 @@ function initWebGLBackdrop() {
       );
       float field = fbm(uv * 1.8 + q * 2.1 - mousePull);
 
-      // Subtle topographic contour rings
       float contour = smoothstep(0.03, 0.0, abs(fract(field * 6.0) - 0.5));
 
       vec3 baseBg = vec3(0.031, 0.035, 0.047);
@@ -789,7 +827,6 @@ function initWebGLBackdrop() {
       col = mix(col, uAccent * 0.36, smoothstep(0.48, 0.92, q.x + mousePull));
       col += uAccent * contour * 0.045;
 
-      // Soft vignette
       float vig = smoothstep(1.35, 0.25, length(vUv - 0.5));
       gl_FragColor = vec4(col * vig, 1.0);
     }
@@ -861,7 +898,6 @@ function initCursorAndInteractions() {
   }
   tickCursor();
 
-  // Delegated clicks & hovers
   document.addEventListener('click', (e) => {
     const projectBtn = e.target.closest('[data-open-project]');
     if (projectBtn) {
@@ -894,7 +930,6 @@ function initCursorAndInteractions() {
     }
   });
 
-  // Hovering a cluster card shifts the live WebGL accent color
   document.addEventListener('pointerover', (e) => {
     const accentCard = e.target.closest('[data-accent]');
     if (accentCard && accentCard.dataset.accent) {
@@ -902,7 +937,6 @@ function initCursorAndInteractions() {
     }
   });
 
-  // Drawer close handlers
   document.getElementById('drawer-close').addEventListener('click', closeProjectDrawer);
   document.getElementById('project-drawer').addEventListener('click', (e) => {
     if (e.target.id === 'project-drawer') closeProjectDrawer();
@@ -911,7 +945,6 @@ function initCursorAndInteractions() {
     if (e.key === 'Escape') closeProjectDrawer();
   });
 
-  // Initialize Lenis smooth scroll if available
   if (typeof Lenis !== 'undefined') {
     const lenis = new Lenis({ duration: 1.1, smoothWheel: true });
     function raf(time) {
