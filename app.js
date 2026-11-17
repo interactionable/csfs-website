@@ -7,7 +7,7 @@
 const CONFIG = {
   // Paste your deployed Google Apps Script Web App URL here (or pass ?api=URL in the browser address bar)
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyTZOwNlNMcZVXyiZhRX4TZ6mOGUylgUZJVuGxwxwdsxDxiOUXeiUoAxwUjgoSmYqoG/exec',
-  STORAGE_KEY: 'csfs_studio_data_v2'
+  STORAGE_KEY: 'csfs_studio_data_v1'
 };
 
 // Default studio dataset (renders immediately while live Apps Script data syncs)
@@ -71,6 +71,7 @@ const FALLBACK_DATA = {
       thumbnail_url: '',
       external_url: 'https://bukas.upou.edu.ph',
       cluster_ids: ['cl_eess', 'cl_dcsi'],
+      related_projects: [],
       leads: [
         { member_name: 'Diego S. Maranan', profile_url: 'https://fics.upou.edu.ph/diego-maranan/', role: 'Lead' }
       ],
@@ -81,12 +82,12 @@ const FALLBACK_DATA = {
     }
   ],
   members: [
-    { member_name: 'Diego S. Maranan', profile_url: 'https://fics.upou.edu.ph/diego-maranan/', role: 'Lead', cluster_ids: ['cl_eess'] },
-    { member_name: 'Shari San Pablo', profile_url: 'https://fics.upou.edu.ph/faculty-prev/shari-eunice-t-san-pablo/', role: 'Co-Lead', cluster_ids: ['cl_eess'] },
-    { member_name: 'Alice Sarmiento', profile_url: '', role: 'Senior', cluster_ids: ['cl_gmdc'] },
-    { member_name: 'Benny Agapito', profile_url: '', role: 'Senior', cluster_ids: ['cl_nat'] },
-    { member_name: 'Ruth Rodriguez', profile_url: '', role: 'Senior', cluster_ids: ['cl_dcsi'] },
-    { member_name: 'Aleana Beato', profile_url: '', role: 'Junior/Undergraduate', cluster_ids: ['cl_eess'] }
+    { member_name: 'Diego S. Maranan', profile_url: 'https://fics.upou.edu.ph/diego-maranan/', role: 'Lead', cluster_ids: ['cl_eess'], thumbnail_url: '' },
+    { member_name: 'Shari San Pablo', profile_url: 'https://fics.upou.edu.ph/faculty-prev/shari-eunice-t-san-pablo/', role: 'Co-Lead', cluster_ids: ['cl_eess'], thumbnail_url: '' },
+    { member_name: 'Alice Sarmiento', profile_url: '', role: 'Senior', cluster_ids: ['cl_gmdc'], thumbnail_url: '' },
+    { member_name: 'Benny Agapito', profile_url: '', role: 'Senior', cluster_ids: ['cl_nat'], thumbnail_url: '' },
+    { member_name: 'Ruth Rodriguez', profile_url: '', role: 'Senior', cluster_ids: ['cl_dcsi'], thumbnail_url: '' },
+    { member_name: 'Aleana Beato', profile_url: '', role: 'Junior/Undergraduate', cluster_ids: ['cl_eess'], thumbnail_url: '' }
   ]
 };
 
@@ -139,7 +140,8 @@ function normalizePayload(raw) {
         member_name: String(m.member_name || '').trim(),
         profile_url: String(m.profile_url || '').trim(),
         role: String(m.role || 'Member').trim(),
-        cluster_ids: Array.isArray(m.cluster_ids) ? m.cluster_ids : []
+        cluster_ids: Array.isArray(m.cluster_ids) ? m.cluster_ids : [],
+        thumbnail_url: String(m.thumbnail_url || m.photo_url || m.avatar_url || '').trim()
       }))
     : structuredClone(FALLBACK_DATA.members);
 
@@ -197,21 +199,52 @@ function normalizePayload(raw) {
     };
   });
 
-  // Normalize projects
-  const projects = Array.isArray(raw.projects) && raw.projects.length
-    ? raw.projects.map(p => ({
-        project_name: String(p.project_name || '').trim(),
-        start_date: String(p.start_date || '').trim(),
-        end_date: String(p.end_date || '').trim(),
-        brief_description: String(p.brief_description || '').trim(),
-        display_order: Number(p.display_order) || 999,
-        thumbnail_url: String(p.thumbnail_url || '').trim(),
-        external_url: String(p.external_url || '').trim(),
-        cluster_ids: Array.isArray(p.cluster_ids) ? p.cluster_ids : [],
-        leads: Array.isArray(p.leads) ? p.leads : [],
-        members: Array.isArray(p.members) ? p.members : []
-      })).sort((a, b) => a.display_order - b.display_order)
-    : structuredClone(FALLBACK_DATA.projects);
+  // Resolve person slugs (e.g., "benny_agapito" -> "Benny Agapito" + profile URL)
+  const resolveProjectPerson = (entry) => {
+    const rawName = typeof entry === 'string' ? entry.trim() : String(entry?.member_name || '').trim();
+    if (!rawName) return null;
+    const compact = rawName.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const match = slugToMember[rawName.toLowerCase()] || slugToMember[compact];
+    if (match) {
+      return {
+        member_name: match.member_name,
+        profile_url: entry?.profile_url || match.profile_url,
+        role: entry?.role || match.role
+      };
+    }
+    return {
+      member_name: rawName.replace(/_/g, ' ').replace(/\w/g, ch => ch.toUpperCase()),
+      profile_url: entry?.profile_url || '',
+      role: entry?.role || ''
+    };
+  };
+
+  // Normalize projects (including related_projects)
+  const rawProjectsList = Array.isArray(raw.projects) && raw.projects.length
+    ? raw.projects
+    : FALLBACK_DATA.projects;
+
+  const projects = rawProjectsList.map(p => {
+    const relatedRaw = Array.isArray(p.related_projects)
+      ? p.related_projects
+      : String(p.related_projects || '').split(',').map(s => s.trim()).filter(Boolean);
+
+    return {
+      project_name: String(p.project_name || '').trim(),
+      start_date: String(p.start_date || '').trim(),
+      end_date: String(p.end_date || '').trim(),
+      brief_description: String(p.brief_description || '').trim(),
+      display_order: Number(p.display_order) || 999,
+      thumbnail_url: String(p.thumbnail_url || '').trim(),
+      external_url: String(p.external_url || '').trim(),
+      cluster_ids: Array.isArray(p.cluster_ids) ? p.cluster_ids : [],
+      leads: Array.isArray(p.leads) ? p.leads.map(resolveProjectPerson).filter(Boolean) : [],
+      members: Array.isArray(p.members) ? p.members.map(resolveProjectPerson).filter(Boolean) : [],
+      related_projects: relatedRaw.map(item =>
+        typeof item === 'string' ? item.trim() : String(item?.project_name || item?.name || '').trim()
+      ).filter(Boolean)
+    };
+  }).sort((a, b) => a.display_order - b.display_order);
 
   return { landing, clusters, projects, members };
 }
@@ -305,6 +338,76 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function findProjectByRef(ref) {
+  const raw = String(ref || '').trim().toLowerCase();
+  if (!raw) return null;
+  const compact = raw.replace(/[^a-z0-9]+/g, '');
+  if (!compact) return null;
+
+  // 1. Exact match against project_id or project_name (raw or alphanumeric slug)
+  const exactMatch = state.data.projects.find(p => {
+    const pid = String(p.project_id || '').trim().toLowerCase();
+    const title = p.project_name.toLowerCase();
+    return (
+      (pid && (pid === raw || pid.replace(/[^a-z0-9]+/g, '') === compact)) ||
+      title === raw ||
+      title.replace(/[^a-z0-9]+/g, '') === compact
+    );
+  });
+  if (exactMatch) return exactMatch;
+
+  // 2. Year-stripped match (e.g. "wearable_futures2022" -> "Wearable Futures")
+  const compactNoYear = compact.replace(/(19|20)\d{2}/g, '');
+  if (compactNoYear.length >= 4) {
+    const yearStrippedMatch = state.data.projects.find(p => {
+      const titleCompact = p.project_name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+      return titleCompact === compactNoYear || titleCompact.replace(/(19|20)\d{2}/g, '') === compactNoYear;
+    });
+    if (yearStrippedMatch) return yearStrippedMatch;
+  }
+
+  // 3. Stemmed prefix match (e.g. "emergingfuturist2022" / "theemergingfuturist2022" -> "Emerging Futurists Residency 2022")
+  const refYear = (compact.match(/(19|20)\d{2}/) || [])[0] || '';
+  const baseStemmed = compactNoYear.replace(/^the/, '').replace(/s$/, '');
+  if (baseStemmed.length >= 6) {
+    const fuzzyMatch = state.data.projects.find(p => {
+      const title = p.project_name.toLowerCase();
+      const titleCompact = title.replace(/[^a-z0-9]+/g, '');
+      const titleYear = (titleCompact.match(/(19|20)\d{2}/) || [])[0] || '';
+      if (refYear && titleYear && refYear !== titleYear) return false;
+
+      const stemmedTitle = (title.match(/[a-z]+/g) || [])
+        .filter(w => w !== 'the')
+        .map(w => (w.length > 4 ? w.replace(/s$/, '') : w))
+        .join('');
+
+      return stemmedTitle.startsWith(baseStemmed) || baseStemmed.startsWith(stemmedTitle);
+    });
+    if (fuzzyMatch) return fuzzyMatch;
+  }
+
+  return null;
+}
+
+function renderRelatedProjectPill(ref) {
+  const target = findProjectByRef(ref);
+  if (target) {
+    return `<button type="button" class="person-pill related-project-pill" data-open-project="${escapeHtml(target.project_name)}" data-cursor="PROJECT">${escapeHtml(target.project_name)} ↗</button>`;
+  }
+  const prettyLabel = String(ref || '')
+    .replace(/_/g, ' ')
+    .replace(/([a-z])(\d)/gi, '$1 $2')
+    .replace(/\b\w/g, ch => ch.toUpperCase());
+  return `<span class="person-pill">${escapeHtml(prettyLabel)}</span>`;
+}
+
+function getInitials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function getClusterById(id) {
@@ -494,6 +597,12 @@ function renderProjectCard(p) {
               ${p.members.map(renderPersonPill).join('')}
             </div>
           ` : ''}
+          ${p.related_projects && p.related_projects.length ? `
+            <div class="people-row">
+              <span class="people-label">RELATED</span>
+              ${p.related_projects.map(renderRelatedProjectPill).join('')}
+            </div>
+          ` : ''}
         </div>
 
         <div class="project-actions">
@@ -576,6 +685,9 @@ function renderMembersView() {
           <h2 class="role-group-title">${escapeHtml(role)} (${groups[role].length})</h2>
           <div class="members-grid">
             ${groups[role].map(m => {
+              const primaryCluster = m.cluster_ids.length ? getClusterById(m.cluster_ids[0]) : null;
+              const ringColor = primaryCluster ? primaryCluster.accent_hex : 'var(--accent)';
+              const initials = escapeHtml(getInitials(m.member_name));
               const chips = m.cluster_ids.map(cid => {
                 const cl = getClusterById(cid);
                 return cl
@@ -583,11 +695,25 @@ function renderMembersView() {
                   : '';
               }).join('');
 
+              const avatarHtml = m.thumbnail_url
+                ? `<div class="member-avatar" style="--avatar-accent:${escapeHtml(ringColor)}">
+                     <img src="${escapeHtml(m.thumbnail_url)}"
+                          alt="${escapeHtml(m.member_name)}"
+                          loading="lazy"
+                          onerror="this.parentElement.innerHTML='<span class=\'member-avatar-initials\'>${initials}</span>';" />
+                   </div>`
+                : `<div class="member-avatar is-fallback" style="--avatar-accent:${escapeHtml(ringColor)}">
+                     <span class="member-avatar-initials">${initials}</span>
+                   </div>`;
+
               const inner = `
                 <div class="member-top">
-                  <div>
-                    <h3 class="member-name">${escapeHtml(m.member_name)}</h3>
-                    <span class="member-role">${escapeHtml(m.role)}</span>
+                  <div class="member-identity">
+                    ${avatarHtml}
+                    <div>
+                      <h3 class="member-name">${escapeHtml(m.member_name)}</h3>
+                      <span class="member-role">${escapeHtml(m.role)}</span>
+                    </div>
                   </div>
                   ${m.profile_url ? '<span class="member-arrow">↗</span>' : ''}
                 </div>
@@ -644,9 +770,15 @@ function openProjectDrawer(projectName) {
       </div>
     ` : ''}
     ${project.members.length ? `
-      <div style="margin-bottom: 2rem;">
+      <div style="margin-bottom: 1.5rem;">
         <span class="mono meta-block-label">PROJECT TEAM</span>
         <div class="pill-list">${project.members.map(renderPersonPill).join('')}</div>
+      </div>
+    ` : ''}
+    ${project.related_projects && project.related_projects.length ? `
+      <div style="margin-bottom: 2rem;">
+        <span class="mono meta-block-label">RELATED PROJECTS</span>
+        <div class="pill-list">${project.related_projects.map(renderRelatedProjectPill).join('')}</div>
       </div>
     ` : ''}
     ${project.external_url ? `
@@ -657,6 +789,8 @@ function openProjectDrawer(projectName) {
   `;
 
   const drawer = document.getElementById('project-drawer');
+  const panel = drawer.querySelector('.drawer-panel');
+  if (panel) panel.scrollTop = 0;
   drawer.classList.add('is-open');
   drawer.setAttribute('aria-hidden', 'false');
 }
