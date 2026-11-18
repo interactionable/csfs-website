@@ -7,7 +7,7 @@
 
 const CONFIG = {
   // Paste your deployed Google Apps Script Web App URL here (or pass ?api=URL in the browser address bar)
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyTZOwNlNMcZVXyiZhRX4TZ6m0GUylgUZJVuGxwxwdsxDxiOUXeiUoAxwUjgoSmYqoG/exec',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyTZOwNlNMcZVXyiZhRX4TZ6mOGUylgUZJVuGxwxwdsxDxiOUXeiUoAxwUjgoSmYqoG/exec',
   STORAGE_KEY: 'csfs_studio_data_v1'
 };
 

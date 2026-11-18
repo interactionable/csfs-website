@@ -689,6 +689,10 @@ button {
   gap: 1.75rem;
 }
 
+.projects-grid[hidden] {
+  display: none;
+}
+
 .project-card {
   display: flex;
   flex-direction: column;
