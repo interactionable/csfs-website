@@ -17,7 +17,8 @@ const FALLBACK_DATA = {
     tagline: 'Bridging artistic production, systems thinking, and applied futures research.',
     about: 'The Creative Systems & Futures studio is the Faculty of Information and Communication Studies’ platform for artistic and speculative research. It advances practice-led inquiry as a method for investigating complex social, technological, and ecological systems—positioning creative production not as peripheral cultural output but as a mode of systems research.',
     unit_url: 'https://fics.upou.edu.ph',
-    contact_email: 'fics@upou.edu.ph'
+    contact_email: 'fics@upou.edu.ph',
+    logo_url: ''
   },
   clusters: [
     {
@@ -63,6 +64,7 @@ const FALLBACK_DATA = {
   ],
   projects: [
     {
+      project_id: 'bukas_lab',
       project_name: 'Bukas Lab',
       start_date: '2022-01-01',
       end_date: 'Ongoing',
@@ -101,7 +103,8 @@ const state = {
   projectStatusFilter: 'all',
   memberClusterFilter: 'all',
   shaderTargetColor: new THREE.Color('#7ee0b8'),
-  shaderTargetEnergy: 0.45
+  shaderTargetEnergy: 0.45,
+  lenis: null
 };
 
 /* ==========================================================================
@@ -113,20 +116,37 @@ function getApiUrl() {
   return params.get('api') || CONFIG.APPS_SCRIPT_URL;
 }
 
+function normalizeAssetUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return '';
+  const driveMatch = rawUrl.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/);
+  return driveMatch ? `https://lh3.googleusercontent.com/d/${driveMatch[1]}` : rawUrl;
+}
+
 function normalizePayload(raw) {
   if (!raw || typeof raw !== 'object') return structuredClone(FALLBACK_DATA);
 
-  // Merge landing safely (handles accidental reversed key/value rows and about_short alias)
+  // Merge landing safely (handles logo_url aliases, reversed key/value rows, and about_short)
   const landing = { ...FALLBACK_DATA.landing };
-  const validLandingKeys = ['title', 'tagline', 'about', 'about_short', 'unit_url', 'contact_email'];
+  const logoKeys = [
+    'logo_url', 'logo', 'csfs_logo', 'csfs_logo_url',
+    'site_logo', 'site_logo_url', 'brand_logo', 'logo_image', 'logo_image_url', 'url_for_logo'
+  ];
+  const validLandingKeys = ['title', 'tagline', 'about', 'about_short', 'unit_url', 'contact_email', ...logoKeys];
+
   if (raw.landing && typeof raw.landing === 'object') {
     Object.entries(raw.landing).forEach(([k, v]) => {
       const key = String(k || '').trim();
       const val = String(v || '').trim();
-      if (validLandingKeys.includes(key) && val) {
-        landing[key === 'about_short' ? 'about' : key] = val;
-      } else if (validLandingKeys.includes(val) && key) {
-        landing[val === 'about_short' ? 'about' : val] = key;
+      const keyLower = key.toLowerCase();
+      const valLower = val.toLowerCase();
+
+      if (validLandingKeys.includes(keyLower) && val) {
+        const targetKey = keyLower === 'about_short' ? 'about' : (logoKeys.includes(keyLower) ? 'logo_url' : keyLower);
+        landing[targetKey] = targetKey === 'logo_url' ? normalizeAssetUrl(val) : val;
+      } else if (validLandingKeys.includes(valLower) && key) {
+        const targetKey = valLower === 'about_short' ? 'about' : (logoKeys.includes(valLower) ? 'logo_url' : valLower);
+        landing[targetKey] = targetKey === 'logo_url' ? normalizeAssetUrl(key) : key;
       }
     });
   }
@@ -134,14 +154,14 @@ function normalizePayload(raw) {
     landing.unit_url = FALLBACK_DATA.landing.unit_url;
   }
 
-  // Normalize members first so we can resolve facilitator slugs
+  // Normalize members first so we can resolve facilitator & project slugs
   const members = Array.isArray(raw.members) && raw.members.length
     ? raw.members.map(m => ({
         member_name: String(m.member_name || '').trim(),
         profile_url: String(m.profile_url || '').trim(),
         role: String(m.role || 'Member').trim(),
         cluster_ids: Array.isArray(m.cluster_ids) ? m.cluster_ids : [],
-        thumbnail_url: String(m.thumbnail_url || m.photo_url || m.avatar_url || '').trim()
+        thumbnail_url: normalizeAssetUrl(m.thumbnail_url || m.photo_url || m.avatar_url || '')
       }))
     : structuredClone(FALLBACK_DATA.members);
 
@@ -195,7 +215,7 @@ function normalizePayload(raw) {
       keywords: Array.isArray(c.keywords) ? c.keywords : [],
       description: String(c.description || '').trim(),
       accent_hex: String(c.accent_hex || '').trim() || DEFAULT_CLUSTER_PALETTE[idx % DEFAULT_CLUSTER_PALETTE.length],
-      thumbnail_url: String(c.thumbnail_url || '').trim()
+      thumbnail_url: normalizeAssetUrl(c.thumbnail_url || '')
     };
   });
 
@@ -213,13 +233,13 @@ function normalizePayload(raw) {
       };
     }
     return {
-      member_name: rawName.replace(/_/g, ' ').replace(/\w/g, ch => ch.toUpperCase()),
+      member_name: rawName.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase()),
       profile_url: entry?.profile_url || '',
       role: entry?.role || ''
     };
   };
 
-  // Normalize projects (including related_projects)
+  // Normalize projects (including project_id and related_projects)
   const rawProjectsList = Array.isArray(raw.projects) && raw.projects.length
     ? raw.projects
     : FALLBACK_DATA.projects;
@@ -230,12 +250,13 @@ function normalizePayload(raw) {
       : String(p.related_projects || '').split(',').map(s => s.trim()).filter(Boolean);
 
     return {
+      project_id: String(p.project_id || p.id || p.slug || '').trim(),
       project_name: String(p.project_name || '').trim(),
       start_date: String(p.start_date || '').trim(),
       end_date: String(p.end_date || '').trim(),
       brief_description: String(p.brief_description || '').trim(),
       display_order: Number(p.display_order) || 999,
-      thumbnail_url: String(p.thumbnail_url || '').trim(),
+      thumbnail_url: normalizeAssetUrl(p.thumbnail_url || ''),
       external_url: String(p.external_url || '').trim(),
       cluster_ids: Array.isArray(p.cluster_ids) ? p.cluster_ids : [],
       leads: Array.isArray(p.leads) ? p.leads.map(resolveProjectPerson).filter(Boolean) : [],
@@ -424,6 +445,24 @@ function renderPersonPill(person) {
 
 function renderLanding() {
   const { landing, clusters, projects } = state.data;
+
+  // Update header logo if configured in Site_Config
+  const brandLogoEl = document.getElementById('brand-logo');
+  const brandMarkEl = document.getElementById('brand-mark');
+  if (brandLogoEl && brandMarkEl) {
+    if (landing.logo_url) {
+      brandLogoEl.onerror = () => {
+        brandLogoEl.hidden = true;
+        brandMarkEl.hidden = false;
+      };
+      brandLogoEl.src = landing.logo_url;
+      brandLogoEl.hidden = false;
+      brandMarkEl.hidden = true;
+    } else {
+      brandLogoEl.hidden = true;
+      brandMarkEl.hidden = false;
+    }
+  }
 
   if (landing.title) {
     const heroTitleEl = document.getElementById('hero-title');
@@ -700,7 +739,7 @@ function renderMembersView() {
                      <img src="${escapeHtml(m.thumbnail_url)}"
                           alt="${escapeHtml(m.member_name)}"
                           loading="lazy"
-                          onerror="this.parentElement.innerHTML='<span class=\'member-avatar-initials\'>${initials}</span>';" />
+                          onerror="this.parentElement.innerHTML='<span class=\\'member-avatar-initials\\'>${initials}</span>';" />
                    </div>`
                 : `<div class="member-avatar is-fallback" style="--avatar-accent:${escapeHtml(ringColor)}">
                      <span class="member-avatar-initials">${initials}</span>
@@ -791,6 +830,9 @@ function openProjectDrawer(projectName) {
   const drawer = document.getElementById('project-drawer');
   const panel = drawer.querySelector('.drawer-panel');
   if (panel) panel.scrollTop = 0;
+  document.documentElement.classList.add('has-drawer-open');
+  document.body.classList.add('has-drawer-open');
+  if (state.lenis) state.lenis.stop();
   drawer.classList.add('is-open');
   drawer.setAttribute('aria-hidden', 'false');
 }
@@ -799,6 +841,9 @@ function closeProjectDrawer() {
   const drawer = document.getElementById('project-drawer');
   drawer.classList.remove('is-open');
   drawer.setAttribute('aria-hidden', 'true');
+  document.documentElement.classList.remove('has-drawer-open');
+  document.body.classList.remove('has-drawer-open');
+  if (state.lenis) state.lenis.start();
 }
 
 /* ==========================================================================
@@ -1081,6 +1126,7 @@ function initCursorAndInteractions() {
 
   if (typeof Lenis !== 'undefined') {
     const lenis = new Lenis({ duration: 1.1, smoothWheel: true });
+    state.lenis = lenis;
     function raf(time) {
       lenis.raf(time);
       requestAnimationFrame(raf);

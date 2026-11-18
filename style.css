@@ -173,6 +173,20 @@ button {
   transition: background 0.6s ease, box-shadow 0.6s ease;
 }
 
+.brand-logo {
+  height: 36px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+  display: block;
+  border-radius: 6px;
+}
+
+.brand-logo[hidden],
+.brand-mark[hidden] {
+  display: none;
+}
+
 .brand-text {
   display: flex;
   flex-direction: column;
@@ -949,10 +963,19 @@ button.related-project-pill:hover {
   pointer-events: auto;
 }
 
+html.has-drawer-open,
+body.has-drawer-open {
+  overflow: hidden;
+}
+
 .drawer-panel {
   width: min(620px, 100vw);
   height: 100%;
+  height: 100dvh;
+  max-height: 100vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: #0d0f14;
   border-left: 1px solid var(--border-strong);
   padding: clamp(1.5rem, 4vw, 2.75rem);

@@ -64,7 +64,7 @@ function doGet(e) {
     })
     .filter(Boolean);
 
-  // 2. Normalize Projects (including related_projects)
+  // 2. Normalize Projects (including project_id and related_projects)
   const resolvePerson = (name) => {
     const key = name.toLowerCase();
     const withoutMiddle = name.replace(/\s+[A-Z]\.\s+/g, ' ').toLowerCase();
@@ -76,6 +76,7 @@ function doGet(e) {
 
   const projects = rawProjects
     .map(p => {
+      const projectId   = firstNonEmpty_(p, ['project_id', 'id', 'slug', 'project_slug', 'code']);
       const projectName = firstNonEmpty_(p, [
         'project_name', 'name', 'title', 'project', 'project_title', 'initiative', 'initiative_name'
       ]);
@@ -96,6 +97,7 @@ function doGet(e) {
       const orderVal = Number(orderRaw);
 
       return {
+        project_id: projectId,
         project_name: projectName,
         start_date: startDate,
         end_date: endDate || statusText,

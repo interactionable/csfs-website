@@ -30,12 +30,13 @@
   <header class="site-header">
     <div class="header-inner">
       <a href="#/" class="brand" data-link>
-        <span class="brand-mark" aria-hidden="true"></span>
-        <span class="brand-text">
-          <span class="brand-title">CSFS</span>
-          <span class="brand-sub">UPOU · FICS</span>
-        </span>
-      </a>
+  <img id="brand-logo" class="brand-logo" alt="CSFS Logo" hidden />
+  <span class="brand-mark" id="brand-mark" aria-hidden="true"></span>
+  <span class="brand-text">
+    <span class="brand-title">CSFS</span>
+    <span class="brand-sub">UPOU · FICS</span>
+  </span>
+</a>
 
       <nav class="main-nav" aria-label="Primary Navigation">
         <a href="#/" class="nav-link" data-route="landing">
@@ -180,7 +181,7 @@
   </main>
 
   <!-- Project Quick-View Drawer -->
-  <aside class="drawer-backdrop" id="project-drawer" aria-hidden="true">
+<aside class="drawer-backdrop" id="project-drawer" aria-hidden="true" data-lenis-prevent>
     <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
       <button class="drawer-close mono" id="drawer-close" aria-label="Close details">ESC / CLOSE ✕</button>
       <div id="drawer-content"></div>
