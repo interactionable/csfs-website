@@ -30,13 +30,13 @@
   <header class="site-header">
     <div class="header-inner">
       <a href="#/" class="brand" data-link>
-  <img id="brand-logo" class="brand-logo" alt="CSFS Logo" hidden />
-  <span class="brand-mark" id="brand-mark" aria-hidden="true"></span>
-  <span class="brand-text">
-    <span class="brand-title">CSFS</span>
-    <span class="brand-sub">UPOU · FICS</span>
-  </span>
-</a>
+        <img id="brand-logo" class="brand-logo" alt="CSFS Logo" hidden />
+        <span class="brand-mark" id="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">
+          <span class="brand-title">CSFS</span>
+          <span class="brand-sub">UPOU · FICS</span>
+        </span>
+      </a>
 
       <nav class="main-nav" aria-label="Primary Navigation">
         <a href="#/" class="nav-link" data-route="landing">
@@ -139,14 +139,28 @@
     <section id="view-projects" class="page-view" data-view="projects" hidden>
       <div class="container">
         <div class="page-intro">
-          <span class="mono section-tag">03 / PORTFOLIO &amp; INITIATIVES</span>
-          <h1 class="page-title">Research <em>Projects</em> &amp; Spaces</h1>
-          <p class="page-subtitle">
-            Tangible experiments, physical laboratories, artworks, and participatory systems developed across the studio.
-          </p>
+          <div class="page-intro-row">
+            <div>
+              <span class="mono section-tag">03 / PORTFOLIO &amp; INITIATIVES</span>
+              <h1 class="page-title">Research <em>Projects</em> &amp; Spaces</h1>
+              <p class="page-subtitle">
+                Tangible experiments, physical laboratories, artworks, and participatory systems developed across the studio.
+              </p>
+            </div>
+
+            <!-- Grid / Graph View Switcher -->
+            <div class="view-toggle" id="project-view-toggle" role="group" aria-label="Switch projects layout">
+              <button type="button" class="view-toggle-btn mono is-active" data-pview="grid" aria-pressed="true">
+                Grid
+              </button>
+              <button type="button" class="view-toggle-btn mono" data-pview="graph" aria-pressed="false">
+                Graph
+              </button>
+            </div>
+          </div>
         </div>
 
-        <!-- Filter Controls -->
+        <!-- Shared Cluster & Status Filter Controls -->
         <div class="filter-bar">
           <div class="filter-group" id="project-cluster-filters" role="group" aria-label="Filter projects by cluster"></div>
           <div class="filter-group" id="project-status-filters" role="group" aria-label="Filter projects by status">
@@ -156,7 +170,53 @@
           </div>
         </div>
 
+        <!-- Grid View -->
         <div class="projects-grid" id="projects-list"></div>
+
+        <!-- Interactive Force-Directed Graph View -->
+        <div class="projects-graph-wrapper" id="projects-graph-wrapper" data-lenis-prevent hidden>
+          <div class="graph-toolbar">
+            <div class="graph-toolbar-section">
+              <button type="button" class="edge-master-btn mono is-active" id="graph-toggle-all-edges" aria-pressed="true">
+                <span class="edge-master-indicator"></span>
+                Connections: ON
+              </button>
+
+              <div class="edge-toggle-group" id="graph-edge-toggles" role="group" aria-label="Toggle connection layers">
+                <button type="button" class="edge-toggle-pill is-active" data-edge-type="related" aria-pressed="true" style="--edge-color: #7ee0b8">
+                  <span class="edge-line-sample is-dashed"></span>
+                  <span>Related Projects</span>
+                  <span class="edge-count mono" id="edge-count-related">0</span>
+                </button>
+                <button type="button" class="edge-toggle-pill is-active" data-edge-type="team" aria-pressed="true" style="--edge-color: #f59eb8">
+                  <span class="edge-line-sample is-dotted"></span>
+                  <span>Team Members</span>
+                  <span class="edge-count mono" id="edge-count-team">0</span>
+                </button>
+                <button type="button" class="edge-toggle-pill is-active" data-edge-type="cluster" aria-pressed="true" style="--edge-color: #8ba6ff">
+                  <span class="edge-line-sample is-solid"></span>
+                  <span>Clusters</span>
+                  <span class="edge-count mono" id="edge-count-cluster">0</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="graph-zoom-controls" role="group" aria-label="Graph viewport controls">
+              <button type="button" class="graph-icon-btn mono" id="graph-zoom-out" title="Zoom out">−</button>
+              <button type="button" class="graph-icon-btn mono" id="graph-zoom-reset" title="Reset view">FIT</button>
+              <button type="button" class="graph-icon-btn mono" id="graph-zoom-in" title="Zoom in">+</button>
+              <button type="button" class="graph-icon-btn mono" id="graph-relayout" title="Re-run layout">↻</button>
+            </div>
+          </div>
+
+          <div class="graph-stage" id="projects-graph-stage">
+            <canvas id="projects-graph-canvas"></canvas>
+            <div class="graph-tooltip" id="projects-graph-tooltip" hidden></div>
+            <div class="graph-hud-hint mono">
+              Drag nodes · Drag background to pan · Scroll to zoom · Click node for details
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -181,7 +241,7 @@
   </main>
 
   <!-- Project Quick-View Drawer -->
-<aside class="drawer-backdrop" id="project-drawer" aria-hidden="true" data-lenis-prevent>
+  <aside class="drawer-backdrop" id="project-drawer" aria-hidden="true" data-lenis-prevent>
     <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
       <button class="drawer-close mono" id="drawer-close" aria-label="Close details">ESC / CLOSE ✕</button>
       <div id="drawer-content"></div>

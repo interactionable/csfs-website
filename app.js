@@ -1,12 +1,13 @@
 /**
  * Creative Systems & Futures (CSFS) — Frontend Application
  * Connects to Google Apps Script JSON API, renders 4 hash-routed views,
- * and drives a reactive Three.js GLSL shader field + GSAP choreography.
+ * drives a reactive Three.js GLSL shader field + GSAP choreography,
+ * and powers an interactive multi-layer project relationship force graph.
  */
 
 const CONFIG = {
   // Paste your deployed Google Apps Script Web App URL here (or pass ?api=URL in the browser address bar)
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyTZOwNlNMcZVXyiZhRX4TZ6mOGUylgUZJVuGxwxwdsxDxiOUXeiUoAxwUjgoSmYqoG/exec',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyTZOwNlNMcZVXyiZhRX4TZ6m0GUylgUZJVuGxwxwdsxDxiOUXeiUoAxwUjgoSmYqoG/exec',
   STORAGE_KEY: 'csfs_studio_data_v1'
 };
 
@@ -102,6 +103,13 @@ const state = {
   projectClusterFilter: 'all',
   projectStatusFilter: 'all',
   memberClusterFilter: 'all',
+  projectViewMode: 'grid', // 'grid' | 'graph'
+  graphShowEdges: true,
+  graphEdgeTypes: {
+    related: true,
+    team: true,
+    cluster: true
+  },
   shaderTargetColor: new THREE.Color('#7ee0b8'),
   shaderTargetEnergy: 0.45,
   lenis: null
@@ -657,8 +665,43 @@ function renderProjectCard(p) {
   `;
 }
 
+function getFilteredProjects() {
+  return state.data.projects.filter(p => {
+    const matchCluster = state.projectClusterFilter === 'all' || p.cluster_ids.includes(state.projectClusterFilter);
+    const isOngoing = String(p.end_date).toLowerCase() === 'ongoing' || !p.end_date;
+    const matchStatus =
+      state.projectStatusFilter === 'all' ||
+      (state.projectStatusFilter === 'ongoing' && isOngoing) ||
+      (state.projectStatusFilter === 'completed' && !isOngoing);
+    return matchCluster && matchStatus;
+  });
+}
+
+function setProjectsViewMode(mode) {
+  state.projectViewMode = mode === 'graph' ? 'graph' : 'grid';
+  const isGraph = state.projectViewMode === 'graph';
+
+  document.querySelectorAll('[data-pview]').forEach(btn => {
+    const active = btn.dataset.pview === state.projectViewMode;
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-pressed', String(active));
+  });
+
+  const gridEl = document.getElementById('projects-list');
+  const graphWrap = document.getElementById('projects-graph-wrapper');
+  if (gridEl) gridEl.hidden = isGraph;
+  if (graphWrap) graphWrap.hidden = !isGraph;
+
+  if (isGraph && window.projectGraph) {
+    requestAnimationFrame(() => {
+      window.projectGraph.resize();
+      window.projectGraph.rebuild(getFilteredProjects());
+    });
+  }
+}
+
 function renderProjectsView() {
-  const { clusters, projects } = state.data;
+  const { clusters } = state.data;
 
   const filterContainer = document.getElementById('project-cluster-filters');
   filterContainer.innerHTML = [
@@ -670,20 +713,16 @@ function renderProjectsView() {
     `)
   ].join('');
 
-  const filtered = projects.filter(p => {
-    const matchCluster = state.projectClusterFilter === 'all' || p.cluster_ids.includes(state.projectClusterFilter);
-    const isOngoing = String(p.end_date).toLowerCase() === 'ongoing' || !p.end_date;
-    const matchStatus =
-      state.projectStatusFilter === 'all' ||
-      (state.projectStatusFilter === 'ongoing' && isOngoing) ||
-      (state.projectStatusFilter === 'completed' && !isOngoing);
-    return matchCluster && matchStatus;
-  });
+  const filtered = getFilteredProjects();
 
   const listEl = document.getElementById('projects-list');
   listEl.innerHTML = filtered.length
     ? filtered.map(renderProjectCard).join('')
     : `<div class="empty-state">No projects match the selected filters yet.</div>`;
+
+  if (window.projectGraph) {
+    window.projectGraph.rebuild(filtered);
+  }
 }
 
 function renderMembersView() {
@@ -739,7 +778,7 @@ function renderMembersView() {
                      <img src="${escapeHtml(m.thumbnail_url)}"
                           alt="${escapeHtml(m.member_name)}"
                           loading="lazy"
-                          onerror="this.parentElement.innerHTML='<span class=\\'member-avatar-initials\\'>${initials}</span>';" />
+                          onerror="this.parentElement.innerHTML='<span class=\'member-avatar-initials\'>${initials}</span>';" />
                    </div>`
                 : `<div class="member-avatar is-fallback" style="--avatar-accent:${escapeHtml(ringColor)}">
                      <span class="member-avatar-initials">${initials}</span>
@@ -872,17 +911,30 @@ function navigateToRoute(routeName, instant = false) {
   const views = document.querySelectorAll('.page-view');
   const nextView = document.getElementById(`view-${target}`);
 
+  const syncGraphOnEnter = () => {
+    if (target === 'projects' && state.projectViewMode === 'graph' && window.projectGraph) {
+      requestAnimationFrame(() => {
+        window.projectGraph.resize();
+        window.projectGraph.rebuild(getFilteredProjects());
+      });
+    }
+  };
+
   if (instant || typeof gsap === 'undefined') {
     views.forEach(v => {
       v.hidden = v !== nextView;
       v.classList.toggle('is-active', v === nextView);
     });
     window.scrollTo(0, 0);
+    syncGraphOnEnter();
     return;
   }
 
   const currentView = Array.from(views).find(v => !v.hidden);
-  if (currentView === nextView) return;
+  if (currentView === nextView) {
+    syncGraphOnEnter();
+    return;
+  }
 
   gsap.to(currentView, {
     opacity: 0,
@@ -894,6 +946,7 @@ function navigateToRoute(routeName, instant = false) {
       nextView.hidden = false;
       nextView.classList.add('is-active');
       window.scrollTo(0, 0);
+      syncGraphOnEnter();
       gsap.fromTo(nextView,
         { opacity: 0, y: 18 },
         { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out' }
@@ -1041,6 +1094,612 @@ function initWebGLBackdrop() {
 }
 
 /* ==========================================================================
+   6B. Interactive Force-Directed Project Relationship Graph
+   ========================================================================== */
+
+function initProjectGraph() {
+  const canvas = document.getElementById('projects-graph-canvas');
+  const stage = document.getElementById('projects-graph-stage');
+  const tooltip = document.getElementById('projects-graph-tooltip');
+  if (!canvas || !stage) return;
+
+  const ctx = canvas.getContext('2d');
+  const savedPositions = new Map(); // Preserves coordinates across filter/edge toggles
+
+  const graph = {
+    width: 900,
+    height: 620,
+    dpr: Math.min(window.devicePixelRatio || 1, 2),
+    nodes: [],
+    allEdges: [],
+    visibleEdges: [],
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    hoveredNode: null,
+    draggedNode: null,
+    isPanning: false,
+    dragStartScreen: { x: 0, y: 0 },
+    panStart: { x: 0, y: 0 },
+    pointerDownScreen: { x: 0, y: 0 },
+    alpha: 1,
+
+    resize() {
+      const rect = stage.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      this.width = rect.width;
+      this.height = rect.height;
+      this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(this.width * this.dpr);
+      canvas.height = Math.round(this.height * this.dpr);
+    },
+
+    screenToWorld(sx, sy) {
+      return {
+        x: (sx - this.width / 2 - this.panX) / this.zoom + this.width / 2,
+        y: (sy - this.height / 2 - this.panY) / this.zoom + this.height / 2
+      };
+    },
+
+    getProjectPeople(project) {
+      const map = new Map();
+      [...(project.leads || []), ...(project.members || [])].forEach(person => {
+        const name = String(person?.member_name || '').trim();
+        if (name) map.set(name.toLowerCase(), name);
+      });
+      return map;
+    },
+
+    rebuild(projectsList) {
+      const projects = Array.isArray(projectsList) ? projectsList : [];
+      const byName = new Map(projects.map(p => [p.project_name, p]));
+
+      // Build all potential edges across the 3 relationship layers
+      const rawEdges = [];
+      const relatedPairs = new Set();
+
+      // 1. Related Projects edges (directed where specified)
+      projects.forEach(src => {
+        (src.related_projects || []).forEach(ref => {
+          const target = findProjectByRef(ref);
+          if (!target || target.project_name === src.project_name || !byName.has(target.project_name)) return;
+
+          const pairKey = [src.project_name, target.project_name].sort().join('||');
+          if (relatedPairs.has(pairKey)) return;
+          relatedPairs.add(pairKey);
+
+          const reverseLinked = (target.related_projects || []).some(r => {
+            const rev = findProjectByRef(r);
+            return rev && rev.project_name === src.project_name;
+          });
+
+          rawEdges.push({
+            source: src.project_name,
+            target: target.project_name,
+            type: 'related',
+            bidirectional: reverseLinked,
+            color: '#7ee0b8',
+            label: 'Related Project'
+          });
+        });
+      });
+
+      // 2. Shared Team Members & 3. Shared Clusters edges
+      for (let i = 0; i < projects.length; i++) {
+        const a = projects[i];
+        const peopleA = this.getProjectPeople(a);
+        const clustersA = new Set(a.cluster_ids || []);
+
+        for (let j = i + 1; j < projects.length; j++) {
+          const b = projects[j];
+
+          // Shared Team Members
+          const peopleB = this.getProjectPeople(b);
+          const sharedPeople = [];
+          peopleA.forEach((displayName, key) => {
+            if (peopleB.has(key)) sharedPeople.push(displayName);
+          });
+
+          if (sharedPeople.length > 0) {
+            rawEdges.push({
+              source: a.project_name,
+              target: b.project_name,
+              type: 'team',
+              sharedPeople,
+              weight: sharedPeople.length,
+              color: '#f59eb8',
+              label: `Shared Team: ${sharedPeople.join(', ')}`
+            });
+          }
+
+          // Shared Clusters
+          const sharedClusterObjs = (b.cluster_ids || [])
+            .filter(cid => clustersA.has(cid))
+            .map(cid => getClusterById(cid))
+            .filter(Boolean);
+
+          if (sharedClusterObjs.length > 0) {
+            const names = sharedClusterObjs.map(c => c.short_name).join(' · ');
+            rawEdges.push({
+              source: a.project_name,
+              target: b.project_name,
+              type: 'cluster',
+              sharedClusters: sharedClusterObjs,
+              weight: sharedClusterObjs.length,
+              color: sharedClusterObjs[0].accent_hex || '#8ba6ff',
+              label: `Cluster: ${names}`
+            });
+          }
+        }
+      }
+
+      this.allEdges = rawEdges;
+
+      // Update edge count badges in toolbar
+      const counts = { related: 0, team: 0, cluster: 0 };
+      rawEdges.forEach(e => {
+        if (counts[e.type] !== undefined) counts[e.type]++;
+      });
+      Object.entries(counts).forEach(([type, count]) => {
+        const el = document.getElementById(`edge-count-${type}`);
+        if (el) el.textContent = count;
+      });
+
+      // Create / preserve nodes
+      const cx = this.width / 2;
+      const cy = this.height / 2;
+      const spread = Math.min(this.width, this.height) * 0.3;
+
+      this.nodes = projects.map((project, idx) => {
+        const existing = savedPositions.get(project.project_name);
+        const angle = (idx / Math.max(projects.length, 1)) * Math.PI * 2;
+        const primaryCluster = project.cluster_ids?.length ? getClusterById(project.cluster_ids[0]) : null;
+        const accent = primaryCluster ? primaryCluster.accent_hex : '#7ee0b8';
+        const isOngoing = String(project.end_date).toLowerCase() === 'ongoing' || !project.end_date;
+
+        return {
+          id: project.project_name,
+          project,
+          accent,
+          isOngoing,
+          x: existing ? existing.x : cx + Math.cos(angle) * spread * (0.65 + (idx % 3) * 0.2),
+          y: existing ? existing.y : cy + Math.sin(angle) * spread * (0.65 + (idx % 3) * 0.2),
+          vx: 0,
+          vy: 0,
+          radius: 11,
+          degree: 0
+        };
+      });
+
+      this.refreshVisibleEdges(true);
+    },
+
+    refreshVisibleEdges(reheat = false) {
+      if (!state.graphShowEdges) {
+        this.visibleEdges = [];
+      } else {
+        this.visibleEdges = this.allEdges.filter(e => Boolean(state.graphEdgeTypes[e.type]));
+      }
+
+      // Group parallel edges between the same pair of nodes so curves fan out cleanly
+      const pairBuckets = new Map();
+      this.visibleEdges.forEach(edge => {
+        const key = [edge.source, edge.target].sort().join('||');
+        if (!pairBuckets.has(key)) pairBuckets.set(key, []);
+        pairBuckets.get(key).push(edge);
+      });
+
+      pairBuckets.forEach(bucket => {
+        bucket.forEach((edge, idx) => {
+          const centeredIndex = idx - (bucket.length - 1) / 2;
+          edge.curveOffset = centeredIndex * 22;
+        });
+      });
+
+      // Recalculate node degrees and radii based on active connections
+      const degMap = new Map(this.nodes.map(n => [n.id, 0]));
+      this.visibleEdges.forEach(e => {
+        degMap.set(e.source, (degMap.get(e.source) || 0) + 1);
+        degMap.set(e.target, (degMap.get(e.target) || 0) + 1);
+      });
+
+      this.nodes.forEach(n => {
+        n.degree = degMap.get(n.id) || 0;
+        n.radius = Math.min(10 + n.degree * 1.45, 24);
+      });
+
+      if (reheat) this.alpha = Math.max(this.alpha, 0.55);
+    },
+
+    relayout() {
+      const cx = this.width / 2;
+      const cy = this.height / 2;
+      const spread = Math.min(this.width, this.height) * 0.28;
+
+      this.nodes.forEach((n, idx) => {
+        const angle = (idx / Math.max(this.nodes.length, 1)) * Math.PI * 2 + Math.random() * 0.4;
+        n.x = cx + Math.cos(angle) * spread;
+        n.y = cy + Math.sin(angle) * spread;
+        n.vx = 0;
+        n.vy = 0;
+      });
+      this.alpha = 1;
+    },
+
+    fitView() {
+      this.zoom = 1;
+      this.panX = 0;
+      this.panY = 0;
+    },
+
+    stepForces() {
+      if (this.alpha < 0.005 || this.nodes.length === 0) return;
+
+      const nodeMap = new Map(this.nodes.map(n => [n.id, n]));
+      const repulsion = 3600;
+      const springK = 0.022;
+      const targetDist = 145;
+      const gravity = 0.014;
+      const damping = 0.84;
+      const cx = this.width / 2;
+      const cy = this.height / 2;
+
+      // Node-node repulsion
+      for (let i = 0; i < this.nodes.length; i++) {
+        const a = this.nodes[i];
+        for (let j = i + 1; j < this.nodes.length; j++) {
+          const b = this.nodes[j];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const distSq = Math.max(dx * dx + dy * dy, 120);
+          const dist = Math.sqrt(distSq);
+          const force = (repulsion / distSq) * this.alpha;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+
+          if (a !== this.draggedNode) { a.vx -= fx; a.vy -= fy; }
+          if (b !== this.draggedNode) { b.vx += fx; b.vy += fy; }
+        }
+      }
+
+      // Spring attraction along active edges
+      this.visibleEdges.forEach(edge => {
+        const a = nodeMap.get(edge.source);
+        const b = nodeMap.get(edge.target);
+        if (!a || !b) return;
+
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const desired = edge.type === 'related' ? targetDist * 0.85 : targetDist;
+        const force = (dist - desired) * springK * this.alpha;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+
+        if (a !== this.draggedNode) { a.vx += fx; a.vy += fy; }
+        if (b !== this.draggedNode) { b.vx -= fx; b.vy -= fy; }
+      });
+
+      // Center gravity & integration
+      const pad = 44;
+      this.nodes.forEach(n => {
+        if (n === this.draggedNode) {
+          savedPositions.set(n.id, { x: n.x, y: n.y });
+          return;
+        }
+        n.vx += (cx - n.x) * gravity * this.alpha;
+        n.vy += (cy - n.y) * gravity * this.alpha;
+        n.vx *= damping;
+        n.vy *= damping;
+
+        n.x = Math.max(pad, Math.min(this.width - pad, n.x + n.vx));
+        n.y = Math.max(pad, Math.min(this.height - pad, n.y + n.vy));
+        savedPositions.set(n.id, { x: n.x, y: n.y });
+      });
+
+      this.alpha *= 0.985;
+    },
+
+    updateTooltip(screenX, screenY) {
+      if (!this.hoveredNode || this.draggedNode) {
+        tooltip.hidden = true;
+        return;
+      }
+
+      const node = this.hoveredNode;
+      const p = node.project;
+      const clusters = (p.cluster_ids || [])
+        .map(cid => getClusterById(cid)?.short_name || cid)
+        .join(' · ');
+
+      const connectedEdges = this.visibleEdges.filter(
+        e => e.source === node.id || e.target === node.id
+      );
+
+      tooltip.innerHTML = `
+        <div class="graph-tooltip-title">${escapeHtml(p.project_name)}</div>
+        <div class="graph-tooltip-meta">
+          ${clusters ? `<div>${escapeHtml(clusters)} · ${escapeHtml(p.end_date || 'Ongoing')}</div>` : ''}
+          <div>${node.degree} visible connection${node.degree === 1 ? '' : 's'}</div>
+        </div>
+        ${connectedEdges.length ? `
+          <div class="graph-tooltip-links">
+            ${connectedEdges.slice(0, 4).map(e => {
+              const other = e.source === node.id ? e.target : e.source;
+              return `<div>→ ${escapeHtml(other)} <span style="opacity:0.7">(${escapeHtml(e.label)})</span></div>`;
+            }).join('')}
+            ${connectedEdges.length > 4 ? `<div>+ ${connectedEdges.length - 4} more</div>` : ''}
+          </div>
+        ` : ''}
+      `;
+
+      tooltip.hidden = false;
+      const left = Math.min(screenX + 16, this.width - 305);
+      const top = Math.min(screenY + 16, this.height - 150);
+      tooltip.style.left = `${Math.max(12, left)}px`;
+      tooltip.style.top = `${Math.max(12, top)}px`;
+    },
+
+    draw() {
+      if (state.activeRoute !== 'projects' || state.projectViewMode !== 'graph') return;
+
+      this.stepForces();
+
+      ctx.save();
+      ctx.scale(this.dpr, this.dpr);
+      ctx.clearRect(0, 0, this.width, this.height);
+
+      // Subtle architectural grid dots
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.055)';
+      const step = 36;
+      for (let gx = step / 2; gx < this.width; gx += step) {
+        for (let gy = step / 2; gy < this.height; gy += step) {
+          ctx.fillRect(gx, gy, 1.2, 1.2);
+        }
+      }
+
+      ctx.save();
+      ctx.translate(this.width / 2 + this.panX, this.height / 2 + this.panY);
+      ctx.scale(this.zoom, this.zoom);
+      ctx.translate(-this.width / 2, -this.height / 2);
+
+      const nodeMap = new Map(this.nodes.map(n => [n.id, n]));
+      const hoveredId = this.hoveredNode ? this.hoveredNode.id : null;
+      const connectedIds = new Set();
+
+      if (hoveredId) {
+        connectedIds.add(hoveredId);
+        this.visibleEdges.forEach(e => {
+          if (e.source === hoveredId) connectedIds.add(e.target);
+          if (e.target === hoveredId) connectedIds.add(e.source);
+        });
+      }
+
+      // Draw Edges
+      this.visibleEdges.forEach(edge => {
+        const a = nodeMap.get(edge.source);
+        const b = nodeMap.get(edge.target);
+        if (!a || !b) return;
+
+        const isHighlighted = !hoveredId || edge.source === hoveredId || edge.target === hoveredId;
+
+        // Use canonical node order for normal vector so parallel edges fan cleanly regardless of direction
+        const [c1, c2] = a.id < b.id ? [a, b] : [b, a];
+        const cdx = c2.x - c1.x;
+        const cdy = c2.y - c1.y;
+        const clen = Math.max(Math.hypot(cdx, cdy), 1);
+        const nx = -cdy / clen;
+        const ny = cdx / clen;
+
+        const midX = (a.x + b.x) / 2 + nx * (edge.curveOffset || 0);
+        const midY = (a.y + b.y) / 2 + ny * (edge.curveOffset || 0);
+
+        ctx.save();
+        ctx.globalAlpha = hoveredId ? (isHighlighted ? 0.92 : 0.08) : 0.48;
+        ctx.strokeStyle = edge.color;
+        ctx.lineWidth = isHighlighted && hoveredId
+          ? 2.2
+          : (edge.weight ? Math.min(1.2 + edge.weight * 0.45, 2.8) : 1.4);
+
+        if (edge.type === 'related') {
+          ctx.setLineDash([6, 5]);
+        } else if (edge.type === 'team') {
+          ctx.setLineDash([2, 4]);
+        } else {
+          ctx.setLineDash([]);
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.quadraticCurveTo(midX, midY, b.x, b.y);
+        ctx.stroke();
+
+        // Directional arrow(s) for Related Projects
+        if (edge.type === 'related') {
+          ctx.setLineDash([]);
+          const drawArrowHead = (fromX, fromY, targetNode) => {
+            const angle = Math.atan2(targetNode.y - fromY, targetNode.x - fromX);
+            const tipX = targetNode.x - Math.cos(angle) * (targetNode.radius + 5);
+            const tipY = targetNode.y - Math.sin(angle) * (targetNode.radius + 5);
+            const arrowLen = 7;
+
+            ctx.fillStyle = edge.color;
+            ctx.beginPath();
+            ctx.moveTo(tipX, tipY);
+            ctx.lineTo(tipX - arrowLen * Math.cos(angle - 0.42), tipY - arrowLen * Math.sin(angle - 0.42));
+            ctx.lineTo(tipX - arrowLen * Math.cos(angle + 0.42), tipY - arrowLen * Math.sin(angle + 0.42));
+            ctx.closePath();
+            ctx.fill();
+          };
+
+          drawArrowHead(midX, midY, b);
+          if (edge.bidirectional) {
+            drawArrowHead(midX, midY, a);
+          }
+        }
+
+        ctx.restore();
+      });
+
+      // Draw Nodes
+      this.nodes.forEach(node => {
+        const isHovered = hoveredId === node.id;
+        const isNeighbor = !hoveredId || connectedIds.has(node.id);
+
+        ctx.save();
+        ctx.globalAlpha = isNeighbor ? 1 : 0.18;
+
+        // Ongoing outer halo
+        if (node.isOngoing) {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, node.radius + 5, 0, Math.PI * 2);
+          ctx.strokeStyle = node.accent;
+          ctx.globalAlpha = isNeighbor ? 0.28 : 0.06;
+          ctx.lineWidth = 1.25;
+          ctx.stroke();
+          ctx.globalAlpha = isNeighbor ? 1 : 0.18;
+        }
+
+        // Node body
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.fillStyle = isHovered ? node.accent : '#131722';
+        ctx.fill();
+        ctx.lineWidth = isHovered ? 3 : 2;
+        ctx.strokeStyle = node.accent;
+        ctx.stroke();
+
+        // Project label
+        ctx.font = isHovered
+          ? '600 12px "Plus Jakarta Sans", sans-serif'
+          : '500 11px "Plus Jakarta Sans", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = isHovered ? '#ffffff' : 'rgba(242, 239, 233, 0.88)';
+        ctx.fillText(node.project.project_name, node.x, node.y + node.radius + 8);
+
+        ctx.restore();
+      });
+
+      ctx.restore();
+      ctx.restore();
+    }
+  };
+
+  // Pointer & Wheel Interactions
+  canvas.addEventListener('pointerdown', e => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const world = graph.screenToWorld(sx, sy);
+
+    graph.pointerDownScreen = { x: sx, y: sy };
+    canvas.setPointerCapture(e.pointerId);
+
+    // Hit-test nodes (reverse order so top-most node wins)
+    for (let i = graph.nodes.length - 1; i >= 0; i--) {
+      const n = graph.nodes[i];
+      if (Math.hypot(world.x - n.x, world.y - n.y) <= n.radius + 6) {
+        graph.draggedNode = n;
+        canvas.classList.add('is-dragging');
+        return;
+      }
+    }
+
+    graph.isPanning = true;
+    graph.dragStartScreen = { x: sx, y: sy };
+    graph.panStart = { x: graph.panX, y: graph.panY };
+    canvas.classList.add('is-dragging');
+  });
+
+  canvas.addEventListener('pointermove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const world = graph.screenToWorld(sx, sy);
+
+    if (graph.draggedNode) {
+      graph.draggedNode.x = world.x;
+      graph.draggedNode.y = world.y;
+      graph.draggedNode.vx = 0;
+      graph.draggedNode.vy = 0;
+      savedPositions.set(graph.draggedNode.id, { x: world.x, y: world.y });
+      graph.alpha = Math.max(graph.alpha, 0.15);
+      tooltip.hidden = true;
+      return;
+    }
+
+    if (graph.isPanning) {
+      graph.panX = graph.panStart.x + (sx - graph.dragStartScreen.x);
+      graph.panY = graph.panStart.y + (sy - graph.dragStartScreen.y);
+      tooltip.hidden = true;
+      return;
+    }
+
+    // Hover detection
+    let hit = null;
+    for (let i = graph.nodes.length - 1; i >= 0; i--) {
+      const n = graph.nodes[i];
+      if (Math.hypot(world.x - n.x, world.y - n.y) <= n.radius + 6) {
+        hit = n;
+        break;
+      }
+    }
+
+    if (hit !== graph.hoveredNode) {
+      graph.hoveredNode = hit;
+      canvas.classList.toggle('is-pointer', Boolean(hit));
+      if (hit) setAccentTheme(hit.accent, 0.72);
+    }
+
+    graph.updateTooltip(sx, sy);
+  });
+
+  canvas.addEventListener('pointerup', e => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const moved = Math.hypot(sx - graph.pointerDownScreen.x, sy - graph.pointerDownScreen.y);
+
+    if (graph.draggedNode && moved < 5) {
+      openProjectDrawer(graph.draggedNode.id);
+    }
+
+    graph.draggedNode = null;
+    graph.isPanning = false;
+    canvas.classList.remove('is-dragging');
+  });
+
+  canvas.addEventListener('pointerleave', () => {
+    if (!graph.draggedNode && !graph.isPanning) {
+      graph.hoveredNode = null;
+      tooltip.hidden = true;
+      canvas.classList.remove('is-pointer');
+    }
+  });
+
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+    graph.zoom = Math.max(0.35, Math.min(2.6, graph.zoom * factor));
+  }, { passive: false });
+
+  window.addEventListener('resize', () => {
+    if (state.activeRoute === 'projects' && state.projectViewMode === 'graph') {
+      graph.resize();
+    }
+  });
+
+  function animateGraph() {
+    requestAnimationFrame(animateGraph);
+    graph.draw();
+  }
+  animateGraph();
+
+  window.projectGraph = graph;
+}
+
+/* ==========================================================================
    7. Custom Cursor, Smooth Scroll (Lenis) & Event Delegation
    ========================================================================== */
 
@@ -1107,6 +1766,58 @@ function initCursorAndInteractions() {
       renderMembersView();
       return;
     }
+
+    // Grid / Graph view toggle
+    const pViewBtn = e.target.closest('[data-pview]');
+    if (pViewBtn) {
+      setProjectsViewMode(pViewBtn.dataset.pview);
+      return;
+    }
+
+    // Master Connections On/Off toggle
+    const toggleAllBtn = e.target.closest('#graph-toggle-all-edges');
+    if (toggleAllBtn) {
+      state.graphShowEdges = !state.graphShowEdges;
+      toggleAllBtn.classList.toggle('is-active', state.graphShowEdges);
+      toggleAllBtn.setAttribute('aria-pressed', String(state.graphShowEdges));
+      toggleAllBtn.innerHTML = `<span class="edge-master-indicator"></span> Connections: ${state.graphShowEdges ? 'ON' : 'OFF'}`;
+
+      const group = document.getElementById('graph-edge-toggles');
+      if (group) group.classList.toggle('is-disabled', !state.graphShowEdges);
+
+      if (window.projectGraph) window.projectGraph.refreshVisibleEdges(true);
+      return;
+    }
+
+    // Individual Edge Type toggles (Related / Team / Clusters)
+    const edgeTypeBtn = e.target.closest('[data-edge-type]');
+    if (edgeTypeBtn) {
+      const type = edgeTypeBtn.dataset.edgeType;
+      state.graphEdgeTypes[type] = !state.graphEdgeTypes[type];
+      edgeTypeBtn.classList.toggle('is-active', state.graphEdgeTypes[type]);
+      edgeTypeBtn.setAttribute('aria-pressed', String(state.graphEdgeTypes[type]));
+
+      if (window.projectGraph) window.projectGraph.refreshVisibleEdges(true);
+      return;
+    }
+
+    // Graph viewport buttons
+    if (e.target.closest('#graph-zoom-in') && window.projectGraph) {
+      window.projectGraph.zoom = Math.min(2.6, window.projectGraph.zoom * 1.2);
+      return;
+    }
+    if (e.target.closest('#graph-zoom-out') && window.projectGraph) {
+      window.projectGraph.zoom = Math.max(0.35, window.projectGraph.zoom * 0.82);
+      return;
+    }
+    if (e.target.closest('#graph-zoom-reset') && window.projectGraph) {
+      window.projectGraph.fitView();
+      return;
+    }
+    if (e.target.closest('#graph-relayout') && window.projectGraph) {
+      window.projectGraph.relayout();
+      return;
+    }
   });
 
   document.addEventListener('pointerover', (e) => {
@@ -1140,6 +1851,7 @@ function initCursorAndInteractions() {
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
+  initProjectGraph();
   renderAll();
   const initialHash = window.location.hash.replace(/^#\/?/, '').split('?')[0];
   navigateToRoute(initialHash || 'landing', true);
