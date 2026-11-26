@@ -29,7 +29,7 @@ const FALLBACK_DATA = {
       facilitator: 'Diego S. Maranan',
       keywords: ['embodiment', 'ecological systems', 'artscience', 'futures literacy', 'speculative design', 'bio-art', 'regenerative design'],
       description: 'Embodied Ecologies & Speculative Systems (EESS) integrates complexity science, technology design, and somatic perspectives to explore human–nonhuman entanglements, embodied cognition, and multiscalar ecological systems.',
-      accent_hex: '#7ee0b8',
+      accent_hex: '#93fc4d',
       thumbnail_url: ''
     },
     {
@@ -39,7 +39,7 @@ const FALLBACK_DATA = {
       facilitator: 'Alice Sarmiento',
       keywords: ['feminist/queer media', 'postcolonial critique', 'platform cultures', 'algorithmic desire', 'digital intimacy'],
       description: 'Gender, Media & Digital Cultures examines platform ecologies, algorithmic mediation, and intersectional digital identities through critical and artistic research.',
-      accent_hex: '#f59eb8',
+      accent_hex: '#ea3369',
       thumbnail_url: ''
     },
     {
@@ -49,7 +49,7 @@ const FALLBACK_DATA = {
       facilitator: 'Benny Agapito',
       keywords: ['narrative aesthetics', 'film & television', 'transmedia storytelling', 'AR/XR', 'immersive media', 'worldbuilding'],
       description: 'Narrative, Aesthetics & Transmedia explores speculative storytelling, experimental film, interactive narrative, and worldbuilding as tools for reimagining communicative futures.',
-      accent_hex: '#8ba6ff',
+      accent_hex: '#e06636',
       thumbnail_url: ''
     },
     {
@@ -59,7 +59,7 @@ const FALLBACK_DATA = {
       facilitator: 'Ruth Rodriguez',
       keywords: ['communication design', 'media arts', 'participatory futures', 'UI/UX', 'service design', 'social innovation'],
       description: 'Design, Communication & Social Innovation advances practice-led design research in participatory futures, and communication-driven transformation, particularly in industry and community contexts.',
-      accent_hex: '#f6c177',
+      accent_hex: '#ffff54',
       thumbnail_url: ''
     }
   ],
@@ -94,7 +94,7 @@ const FALLBACK_DATA = {
   ]
 };
 
-const DEFAULT_CLUSTER_PALETTE = ['#7ee0b8', '#f59eb8', '#8ba6ff', '#f6c177', '#b497ff'];
+const DEFAULT_CLUSTER_PALETTE = ['#93fc4d', '#ea3369', '#e06636', '#ffff54', '#b497ff'];
 
 // Application State
 const state = {
@@ -110,7 +110,7 @@ const state = {
     team: true,
     cluster: true
   },
-  shaderTargetColor: new THREE.Color('#7ee0b8'),
+  shaderTargetColor: new THREE.Color('#93fc4d'),
   shaderTargetEnergy: 0.45,
   lenis: null
 };
@@ -318,7 +318,7 @@ async function syncData() {
    2. Procedural Generative Artwork Fallback for Missing Thumbnails
    ========================================================================== */
 
-function generateProceduralCover(seedText, accentHex = '#7ee0b8') {
+function generateProceduralCover(seedText, accentHex = '#93fc4d') {
   let hash = 0;
   for (let i = 0; i < seedText.length; i++) {
     hash = seedText.charCodeAt(i) + ((hash << 5) - hash);
@@ -336,7 +336,7 @@ function generateProceduralCover(seedText, accentHex = '#7ee0b8') {
           <stop offset="100%" stop-color="#0b0d13" stop-opacity="0"/>
         </radialGradient>
         <radialGradient id="g2" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#8ba6ff" stop-opacity="0.35"/>
+          <stop offset="0%" stop-color="#e06636" stop-opacity="0.35"/>
           <stop offset="100%" stop-color="#0b0d13" stop-opacity="0"/>
         </radialGradient>
       </defs>
@@ -604,7 +604,7 @@ function renderClustersView() {
 
 function renderProjectCard(p) {
   const primaryCluster = p.cluster_ids.length ? getClusterById(p.cluster_ids[0]) : null;
-  const accent = primaryCluster ? primaryCluster.accent_hex : '#7ee0b8';
+  const accent = primaryCluster ? primaryCluster.accent_hex : '#93fc4d';
   const fallbackImg = generateProceduralCover(p.project_name, accent);
   const imgSrc = p.thumbnail_url || fallbackImg;
   const dateLabel = [p.start_date, p.end_date].filter(Boolean).join(' — ') || 'Active';
@@ -612,7 +612,7 @@ function renderProjectCard(p) {
   const clusterChips = p.cluster_ids.map(cid => {
     const cl = getClusterById(cid);
     const label = cl ? cl.short_name : cid;
-    const color = cl ? cl.accent_hex : '#7ee0b8';
+    const color = cl ? cl.accent_hex : '#93fc4d';
     return `<span class="cluster-chip" style="--chip-color: ${escapeHtml(color)}">${escapeHtml(label)}</span>`;
   }).join('');
 
@@ -824,7 +824,7 @@ function openProjectDrawer(projectName) {
   if (!project) return;
 
   const primaryCluster = project.cluster_ids.length ? getClusterById(project.cluster_ids[0]) : null;
-  const accent = primaryCluster ? primaryCluster.accent_hex : '#7ee0b8';
+  const accent = primaryCluster ? primaryCluster.accent_hex : '#93fc4d';
   const fallbackImg = generateProceduralCover(project.project_name, accent);
   const imgSrc = project.thumbnail_url || fallbackImg;
   const dateLabel = [project.start_date, project.end_date].filter(Boolean).join(' — ');
@@ -890,10 +890,10 @@ function closeProjectDrawer() {
    ========================================================================== */
 
 const ROUTE_THEME = {
-  landing:  { color: '#7ee0b8', energy: 0.45 },
-  clusters: { color: '#8ba6ff', energy: 0.72 },
-  projects: { color: '#f6c177', energy: 0.60 },
-  members:  { color: '#f59eb8', energy: 0.50 }
+  landing:  { color: '#93fc4d', energy: 0.45 }, // Overview (neon green)
+  clusters: { color: '#e06636', energy: 0.72 }, // Clusters (burnt orange)
+  projects: { color: '#ffff54', energy: 0.60 }, // Projects (hot yellow)
+  members:  { color: '#ea3369', energy: 0.50 } // Members  (hot pink)
 };
 
 function navigateToRoute(routeName, instant = false) {
@@ -987,7 +987,7 @@ function initWebGLBackdrop() {
     uTime: { value: 0 },
     uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
     uMouse: { value: new THREE.Vector2(0.5, 0.5) },
-    uAccent: { value: new THREE.Color('#7ee0b8') },
+    uAccent: { value: new THREE.Color('#93fc4d') },
     uSecondary: { value: new THREE.Color('#3b4d9b') },
     uEnergy: { value: 0.45 }
   };
@@ -1178,7 +1178,7 @@ function initProjectGraph() {
             target: target.project_name,
             type: 'related',
             bidirectional: reverseLinked,
-            color: '#7ee0b8',
+            color: '#93fc4d',
             label: 'Related Project'
           });
         });
@@ -1207,7 +1207,7 @@ function initProjectGraph() {
               type: 'team',
               sharedPeople,
               weight: sharedPeople.length,
-              color: '#f59eb8',
+              color: '#ea3369',
               label: `Shared Team: ${sharedPeople.join(', ')}`
             });
           }
@@ -1226,7 +1226,7 @@ function initProjectGraph() {
               type: 'cluster',
               sharedClusters: sharedClusterObjs,
               weight: sharedClusterObjs.length,
-              color: sharedClusterObjs[0].accent_hex || '#8ba6ff',
+              color: sharedClusterObjs[0].accent_hex || '#e06636',
               label: `Cluster: ${names}`
             });
           }
@@ -1254,7 +1254,7 @@ function initProjectGraph() {
         const existing = savedPositions.get(project.project_name);
         const angle = (idx / Math.max(projects.length, 1)) * Math.PI * 2;
         const primaryCluster = project.cluster_ids?.length ? getClusterById(project.cluster_ids[0]) : null;
-        const accent = primaryCluster ? primaryCluster.accent_hex : '#7ee0b8';
+        const accent = primaryCluster ? primaryCluster.accent_hex : '#93fc4d';
         const isOngoing = String(project.end_date).toLowerCase() === 'ongoing' || !project.end_date;
 
         return {
