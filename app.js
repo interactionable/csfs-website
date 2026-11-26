@@ -890,9 +890,9 @@ function closeProjectDrawer() {
    ========================================================================== */
 
 const ROUTE_THEME = {
-  landing:  { color: '#93fc4d', energy: 0.45 }, // Overview (neon green)
+  landing:  { color: '#ffff54', energy: 0.45 }, // Overview (yellow)
   clusters: { color: '#e06636', energy: 0.72 }, // Clusters (burnt orange)
-  projects: { color: '#ffff54', energy: 0.60 }, // Projects (hot yellow)
+  projects: { color: '#93fc4d', energy: 0.60 }, // Projects (green)
   members:  { color: '#ea3369', energy: 0.50 } // Members  (hot pink)
 };
 

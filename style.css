@@ -18,6 +18,22 @@
   font-display: swap;
 }
 
+   @font-face {
+  font-family: 'SpecialElite';
+  src: url('./fonts/SpecialElite-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+   @font-face {
+  font-family: 'ClimateCrisis';
+  src: url('./fonts/ClimateCrisis-Regular-VariableFont_YEAR.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
    @font-face {
   font-family: 'Cubao-Condensed';
@@ -36,7 +52,13 @@
   font-display: swap;
 }
 
-
+   @font-face {
+  font-family: 'PoetsenOne';
+  src: url('./fonts/PoetsenOne-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 @font-face {
   font-family: 'SpaceMono';
@@ -45,6 +67,15 @@
   font-style: normal;
   font-display: swap;
 }
+@font-face {
+  font-family: 'OoohBaby';
+  src: url('./fonts/OoohBaby-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+
 
 
 :root {
@@ -59,9 +90,10 @@
   --text-dim: #666c7a;
   --accent: #7ee0b8;
   --accent-2: #8ba6ff;
-  --font-title: 'Cubao-Condensed', 'Instrument Serif', Georgia, serif;
-  --font-body: 'SpaceMono', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-annotations: 'Quiapo', 'JetBrains Mono', monospace;
+  --font-headings: 'Cubao-Condensed', 'ClimateCrisis', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'SpecialElite', 'Instrument Serif', Georgia, serif;
+  --font-annotations: 'OoohBaby', 'PoetsenOne', 'JetBrains Mono', monospace;
+  --font-titles: 'Quiapo', 'PoetsenOne', 'JetBrains Mono', monospace;
   --radius: 16px;
   --radius-sm: 8px;
   --header-h: 76px;
@@ -239,9 +271,11 @@ button {
 }
 
 .brand-title {
+  font-family: var(--font-headings);
   font-weight: 700;
   letter-spacing: 0.06em;
   font-size: 0.95rem;
+  
 }
 
 .brand-sub {
@@ -345,7 +379,7 @@ button {
 }
 
 .hero-title {
-  font-family: var(--font-title);
+  font-family: var(--font-headings);
   font-weight: 400;
   font-size: clamp(3.25rem, 8.5vw, 7.2rem);
   line-height: 0.96;
@@ -446,7 +480,7 @@ button {
 }
 
 .section-title {
-  font-family: var(--font-title);
+  font-family: var(--font-headings);
   font-weight: 400;
   font-size: clamp(2rem, 4vw, 3rem);
   line-height: 1.1;
@@ -472,7 +506,7 @@ button {
 }
 
 .page-title {
-  font-family: var(--font-title);
+  font-family: var(--font-headings);
   font-weight: 400;
   font-size: clamp(2.75rem, 6.5vw, 5.25rem);
   line-height: 1.02;
@@ -554,7 +588,7 @@ button {
 }
 
 .cluster-mini-title {
-  font-family: var(--font-title);
+  font-family: var(--font-headings);
   font-size: 1.6rem;
   line-height: 1.15;
   margin: 1rem 0 0.7rem;
@@ -640,7 +674,7 @@ button {
 }
 
 .cluster-detail-title {
-  font-family: var(--font-title);
+  font-family: var(--font-headings);
   font-size: clamp(1.9rem, 3.2vw, 2.6rem);
   font-weight: 400;
   line-height: 1.12;
@@ -810,7 +844,7 @@ button {
 }
 
 .project-title {
-  font-family: var(--font-title);
+  font-family: var(--font-titles);
   font-size: 1.85rem;
   font-weight: 400;
   line-height: 1.15;
@@ -1087,7 +1121,7 @@ a.person-pill:hover {
 }
 
 .graph-tooltip-title {
-  font-family: var(--font-title);
+  font-family: var(--font-headings);
   font-size: 1.25rem;
   line-height: 1.2;
   margin: 0 0 0.35rem;
@@ -1322,7 +1356,7 @@ body.has-drawer-open {
 }
 
 .footer-brand {
-  font-family: var(--font-title);
+  font-family: var(--font-headings);
   font-size: 1.35rem;
 }
 
